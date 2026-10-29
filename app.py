@@ -201,6 +201,89 @@ SKILLS = [
 ]
 
 
+# Canonical skills and common variations. Word boundaries avoid false
+# matches such as detecting the skill "R" inside every English word.
+SKILL_ALIASES = {
+    "Python": ["python"],
+    "R": ["r programming", "r language", "r"],
+    "Java": ["java"],
+    "C++": ["c++", "cpp"],
+    "C#": ["c#", "c sharp"],
+    "JavaScript": ["javascript", "java script"],
+    "TypeScript": ["typescript", "type script"],
+    "PHP": ["php"],
+    "Scala": ["scala"],
+    "Pandas": ["pandas"],
+    "NumPy": ["numpy"],
+    "Scikit-learn": ["scikit-learn", "scikit learn", "sklearn"],
+    "TensorFlow": ["tensorflow"],
+    "PyTorch": ["pytorch", "py torch"],
+    "Keras": ["keras"],
+    "Machine Learning": ["machine learning", "machine-learning", "ml"],
+    "Deep Learning": ["deep learning", "deep-learning"],
+    "NLP": ["natural language processing", "nlp"],
+    "Computer Vision": ["computer vision", "opencv"],
+    "Data Science": ["data science", "data scientist"],
+    "Data Analysis": ["data analysis", "data analytics", "data analyst", "analytics"],
+    "Statistics": ["statistics", "statistical analysis", "statistical modelling", "statistical modeling"],
+    "Predictive Analytics": ["predictive analytics", "predictive modelling", "predictive modeling"],
+    "Regression": ["regression"],
+    "Classification": ["classification"],
+    "Clustering": ["clustering"],
+    "Time Series": ["time series", "time-series forecasting"],
+    "Power BI": ["power bi", "powerbi"],
+    "Tableau": ["tableau"],
+    "Looker": ["looker"],
+    "Looker Studio": ["looker studio", "google data studio"],
+    "Excel": ["excel", "microsoft excel", "ms excel"],
+    "VBA": ["vba"],
+    "DAX": ["dax"],
+    "SQL": ["sql", "structured query language"],
+    "MySQL": ["mysql", "my sql"],
+    "PostgreSQL": ["postgresql", "postgres"],
+    "Oracle": ["oracle database", "oracle"],
+    "SQL Server": ["sql server", "microsoft sql server", "ms sql server"],
+    "MongoDB": ["mongodb", "mongo db"],
+    "Snowflake": ["snowflake"],
+    "Databricks": ["databricks"],
+    "Spark": ["apache spark", "spark"],
+    "PySpark": ["pyspark", "py spark"],
+    "Hadoop": ["hadoop"],
+    "Hive": ["apache hive", "hive"],
+    "Airflow": ["apache airflow", "airflow"],
+    "AWS": ["amazon web services", "aws"],
+    "Azure": ["microsoft azure", "azure"],
+    "GCP": ["google cloud platform", "gcp", "google cloud"],
+    "Docker": ["docker"],
+    "Kubernetes": ["kubernetes", "k8s"],
+    "Terraform": ["terraform"],
+    "Jenkins": ["jenkins"],
+    "Git": ["git"],
+    "GitHub": ["github"],
+    "GitLab": ["gitlab", "git lab"],
+    "Linux": ["linux"],
+    "HTML": ["html"],
+    "CSS": ["css"],
+    "React": ["react", "react.js", "reactjs"],
+    "Angular": ["angular", "angular.js", "angularjs"],
+    "Node.js": ["node.js", "nodejs", "node js"],
+    "Django": ["django"],
+    "Flask": ["flask"],
+    "FastAPI": ["fastapi", "fast api"],
+    "REST API": ["rest api", "restful api", "rest apis"],
+    "Agile": ["agile"],
+    "Scrum": ["scrum"],
+    "Project Management": ["project management", "project manager"],
+    "Stakeholder Management": ["stakeholder management", "stakeholder engagement"],
+    "Business Analysis": ["business analysis", "business analyst"],
+    "Business Intelligence": ["business intelligence", "bi reporting"],
+    "Recruitment": ["recruitment", "recruiting"],
+    "Talent Acquisition": ["talent acquisition"],
+    "Candidate Management": ["candidate management"],
+    "Sourcing": ["sourcing", "candidate sourcing"],
+}
+
+
 # ============================================================
 # Stopwords
 # ============================================================
@@ -552,25 +635,21 @@ def experience_score(
     candidate_years: float,
     required_years: float
 ) -> float:
-
+    """Estimate experience fit. Missing information receives a neutral score."""
     if required_years <= 0:
-        return 70.0
+        return 60.0
 
+    # A zero here often means the parser could not detect the duration,
+    # not that the candidate has no experience.
     if candidate_years <= 0:
-        return 20.0
+        return 55.0
 
     if candidate_years >= required_years:
-        # Extra experience gets a modest bonus
-        bonus = min(
-            (candidate_years - required_years) * 5,
-            20
-        )
-
-        return min(100, 80 + bonus)
+        extra = min((candidate_years - required_years) * 3, 15)
+        return min(100.0, 85.0 + extra)
 
     ratio = candidate_years / required_years
-
-    return max(20, ratio * 80)
+    return max(25.0, ratio * 85.0)
 
 
 # ============================================================
@@ -758,80 +837,63 @@ def extract_education(text: str) -> str:
     return " | ".join(found[:4])
 
 
-def education_score(
-    jd_text: str,
-    cv_text: str
-) -> float:
-
+def education_score(jd_text: str, cv_text: str) -> float:
+    """Compare education levels without punishing missing extraction as a mismatch."""
     jd = normalize_text(jd_text)
     cv = normalize_text(cv_text)
 
-    levels = [
-        (
-            ["phd", "doctorate"],
-            100
-        ),
-        (
-            ["master of science", "msc", "master's", "master"],
-            85
-        ),
-        (
-            ["mba"],
-            85
-        ),
-        (
-            ["bachelor", "bsc", "bsc.", "ba", "beng", "be"],
-            70
-        )
-    ]
+    def level(text: str) -> int:
+        if any(term in text for term in ["phd", "ph.d", "doctorate", "doctoral"]):
+            return 3
+        if any(term in text for term in [
+            "master of science", "master of arts", "master's", "masters", "msc", "mba", "master degree"
+        ]):
+            return 2
+        if any(term in text for term in [
+            "bachelor", "bsc", "b.sc", "beng", "b.eng", "undergraduate degree", "bachelors"
+        ]):
+            return 1
+        return 0
 
-    for terms, score in levels:
-
-        jd_has = any(term in jd for term in terms)
-
-        if jd_has:
-
-            cv_has = any(term in cv for term in terms)
-
-            if cv_has:
-                return score
-
-            # Higher education may still satisfy lower requirements
-            if any(
-                term in cv
-                for term in [
-                    "msc",
-                    "master",
-                    "phd",
-                    "doctorate"
-                ]
-            ):
-                return 90
-
-            return 20
-
-    return 70
+    # Only compare degree levels when the JD clearly names one.
+    required_level = level(jd)
+    candidate_level = level(cv)
+    if required_level == 0:
+        return 60.0
+    if candidate_level == 0:
+        # Missing education text is unknown, not proof of no qualification.
+        return 55.0
+    if candidate_level >= required_level:
+        return 100.0
+    return round(max(20.0, candidate_level / required_level * 80.0), 1)
 
 
 # ============================================================
 # Skill matching
 # ============================================================
 
+def _alias_found(text: str, alias: str) -> bool:
+    """Match an alias as a phrase/token, not as an arbitrary substring."""
+    alias = alias.strip().lower()
+    if not alias:
+        return False
+    # Special case the single-letter language R: only match an isolated R.
+    if alias == "r":
+        return bool(re.search(r"(?<!\w)r(?!\w)", text, flags=re.IGNORECASE))
+    pattern = r"(?<![a-z0-9])" + re.escape(alias) + r"(?![a-z0-9])"
+    return bool(re.search(pattern, text, flags=re.IGNORECASE))
+
+
 def find_skills(text: str) -> List[str]:
-
+    """Return deduplicated canonical skills using safe word-boundary matching."""
+    if not text:
+        return []
     normalized = normalize_text(text)
-
     found = []
-
-    for skill in SKILLS:
-
-        skill_norm = normalize_text(skill)
-
-        if skill_norm in normalized:
-
-            if skill not in found:
-                found.append(skill)
-
+    # Longer aliases are evaluated first inside each skill's alias list.
+    for canonical, aliases in SKILL_ALIASES.items():
+        if any(_alias_found(normalized, alias) for alias in aliases):
+            found.append(canonical)
     return found
 
 
@@ -839,27 +901,48 @@ def calculate_skill_score(
     jd_text: str,
     cv_text: str
 ) -> Tuple[float, List[str], List[str]]:
-
+    """Weighted coverage of JD-mentioned skills; essential skills count more."""
     jd_skills = find_skills(jd_text)
-    cv_skills = find_skills(cv_text)
+    cv_skill_set = set(find_skills(cv_text))
 
     if not jd_skills:
+        # No skills recognized in the JD: don't pretend the candidate failed.
+        return 55.0, [], []
 
-        return 70.0, [], []
+    important_words = re.compile(
+        r"\b(required|essential|must[- ]have|mandatory|minimum|required skills|"
+        r"need to have|key requirement|must possess)\b",
+        flags=re.IGNORECASE
+    )
+    preferred_words = re.compile(
+        r"\b(preferred|desirable|bonus|nice to have|advantageous)\b",
+        flags=re.IGNORECASE
+    )
 
-    jd_set = set(jd_skills)
-    cv_set = set(cv_skills)
+    essential_skills = set()
+    preferred_skills = set()
+    for line in jd_text.splitlines():
+        line_skills = set(find_skills(line))
+        if not line_skills:
+            continue
+        if important_words.search(line):
+            essential_skills.update(line_skills)
+        elif preferred_words.search(line):
+            preferred_skills.update(line_skills)
 
-    matched = sorted(jd_set.intersection(cv_set))
+    matched = sorted(set(jd_skills) & cv_skill_set)
+    missing = sorted(set(jd_skills) - cv_skill_set)
 
-    missing = sorted(jd_set.difference(cv_set))
+    weighted_total = 0.0
+    weighted_matched = 0.0
+    for skill in set(jd_skills):
+        weight = 2.0 if skill in essential_skills else (0.6 if skill in preferred_skills else 1.0)
+        weighted_total += weight
+        if skill in cv_skill_set:
+            weighted_matched += weight
 
-    score = (
-        len(matched) /
-        max(len(jd_set), 1)
-    ) * 100
-
-    return score, matched, missing
+    score = 100.0 * weighted_matched / weighted_total if weighted_total else 55.0
+    return round(score, 1), matched, missing
 
 
 # ============================================================
@@ -896,41 +979,18 @@ def keyword_coverage_score(
     jd_text: str,
     cv_text: str
 ) -> Tuple[float, List[str]]:
-
-    jd_keywords = extract_keywords(
-        jd_text,
-        max_words=35
-    )
-
-    cv_keywords = set(
-        extract_keywords(
-            cv_text,
-            max_words=120
-        )
-    )
-
+    """Measure JD keyword coverage across the entire CV, not just its top words."""
+    jd_keywords = extract_keywords(jd_text, max_words=30)
     if not jd_keywords:
-        return 70.0, []
+        return 55.0, []
 
-    matched = [
-        word
-        for word in jd_keywords
-        if word in cv_keywords
-    ]
+    normalized_cv = normalize_text(cv_text)
+    cv_tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9+#.\-]{1,}", normalized_cv))
+    matched = [word for word in jd_keywords if word in cv_tokens]
+    coverage = len(matched) / max(len(jd_keywords), 1)
 
-    coverage = (
-        len(matched) /
-        max(len(jd_keywords), 1)
-    )
-
-    # Calibration:
-    # lexical overlap is usually naturally low.
-    score = min(
-        100,
-        coverage * 170
-    )
-
-    return score, matched
+    # Keep this as a coverage measure; don't artificially inflate it.
+    return round(coverage * 100, 1), matched
 
 
 # ============================================================
@@ -941,85 +1001,102 @@ def calculate_tfidf_similarity(
     jd_text: str,
     cv_text: str
 ) -> float:
-
+    """Calibrated lexical similarity. It is a ranking signal, not a probability."""
     jd = normalize_text(jd_text)
     cv = normalize_text(cv_text)
-
     if not jd or not cv:
         return 0.0
 
     try:
-
         vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2),
             min_df=1,
-            sublinear_tf=True
+            sublinear_tf=True,
+            max_features=25000
         )
-
-        matrix = vectorizer.fit_transform(
-            [jd, cv]
-        )
-
-        raw = cosine_similarity(
-            matrix[0:1],
-            matrix[1:2]
-        )[0][0]
-
-        # Convert naturally small cosine values to useful
-        # 0-100 screening scale.
-        score = min(
-            100,
-            raw * 250
-        )
-
-        return round(score, 2)
-
-    except Exception:
+        matrix = vectorizer.fit_transform([jd, cv])
+        raw = float(cosine_similarity(matrix[0:1], matrix[1:2])[0][0])
+        # Map typical low document cosine values onto a more usable score range.
+        score = np.clip((raw - 0.02) / 0.28 * 100, 0, 100)
+        return round(float(score), 1)
+    except ValueError:
         return 0.0
 
 
-# ============================================================
-# Sentence Transformer semantic similarity
-# ============================================================
+def split_into_chunks(text: str, chunk_words: int = 110, overlap_words: int = 25,
+                      max_chunks: int = 35) -> List[str]:
+    """Split long documents into overlapping chunks to avoid model truncation."""
+    words = re.findall(r"\S+", text or "")
+    if not words:
+        return []
+    if len(words) <= chunk_words:
+        return [" ".join(words)]
+
+    step = max(1, chunk_words - overlap_words)
+    starts = list(range(0, len(words), step))
+    if len(starts) > max_chunks:
+        # Sample across the full CV/JD rather than keeping only the beginning.
+        indexes = np.linspace(0, len(starts) - 1, max_chunks).round().astype(int)
+        starts = [starts[i] for i in sorted(set(indexes))]
+
+    chunks = []
+    for start in starts:
+        chunk = " ".join(words[start:start + chunk_words])
+        if chunk:
+            chunks.append(chunk)
+        if start + chunk_words >= len(words):
+            break
+    return chunks
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def encode_text_chunks(text: str, model_name: str, chunk_words: int,
+                       overlap_words: int, max_chunks: int):
+    """Cache chunk embeddings so the same JD is not encoded for every resume."""
+    chunks = split_into_chunks(
+        text, chunk_words=chunk_words,
+        overlap_words=overlap_words, max_chunks=max_chunks
+    )
+    if not chunks:
+        return [], np.empty((0, 384), dtype=np.float32)
+    model = load_embedding_model()
+    embeddings = model.encode(
+        chunks, convert_to_numpy=True, normalize_embeddings=True,
+        show_progress_bar=False, batch_size=32
+    )
+    return chunks, embeddings
+
 
 def calculate_semantic_similarity(
     jd_text: str,
     cv_text: str,
     model
 ) -> float:
-
-    jd = normalize_text(jd_text)
-    cv = normalize_text(cv_text)
-
-    if not jd or not cv:
+    """Compare JD and CV chunks so key information beyond the first page counts."""
+    if not jd_text.strip() or not cv_text.strip():
         return 0.0
 
     try:
-
-        embeddings = model.encode(
-            [jd, cv],
-            normalize_embeddings=True
+        jd_chunks, jd_embeddings = encode_text_chunks(
+            jd_text, MODEL_NAME, 110, 20, 20
         )
-
-        raw = float(
-            np.dot(
-                embeddings[0],
-                embeddings[1]
-            )
+        cv_chunks, cv_embeddings = encode_text_chunks(
+            cv_text, MODEL_NAME, 110, 25, 35
         )
+        if not jd_chunks or not cv_chunks:
+            return 0.0
 
-        # Sentence-transformer cosine similarities for
-        # real-world JD/CV pairs are often around 0.2-0.6.
-        # Calibrate that into a useful screening range.
-        score = ((raw - 0.10) / 0.45) * 100
+        similarities = np.matmul(jd_embeddings, cv_embeddings.T)
+        # For each JD chunk, keep the strongest related CV chunk. This makes a
+        # relevant career section count even when the CV contains unrelated text.
+        best_per_jd_chunk = similarities.max(axis=1)
+        best_scores = np.sort(best_per_jd_chunk)[-min(3, len(best_per_jd_chunk)):]
+        raw = float(0.65 * best_scores.max() + 0.35 * best_scores.mean())
 
-        score = float(
-            np.clip(score, 0, 100)
-        )
-
-        return round(score, 2)
-
+        # Convert cosine similarity to a convenient screening scale; not accuracy.
+        score = np.clip((raw - 0.20) / 0.45 * 100, 0, 100)
+        return round(float(score), 1)
     except Exception:
         return 0.0
 
@@ -1080,42 +1157,18 @@ def calculate_final_score(
     experience_score_value: float,
     education_score_value: float
 ) -> float:
-
-    """
-    Final CvScout scoring model.
-
-    Semantic similarity      = 30%
-    TF-IDF similarity        = 15%
-    Skill match              = 25%
-    Keyword coverage         = 15%
-    Experience match         = 10%
-    Education match          = 5%
-    """
-
+    """Weighted relevance score. The score is not a probability or accuracy."""
     final_score = (
         semantic_score * 0.30 +
-        tfidf_score * 0.15 +
+        tfidf_score * 0.10 +
         skill_score * 0.25 +
-        keyword_score * 0.15 +
+        keyword_score * 0.20 +
         experience_score_value * 0.10 +
         education_score_value * 0.05
     )
-
-    return round(
-        float(np.clip(final_score, 0, 100)),
-        1
-    )
+    return round(float(np.clip(final_score, 0, 100)), 1)
 
 
-def get_decision(score: float) -> str:
-
-    if score >= 60:
-        return "Take"
-
-    if score >= 40:
-        return "Review"
-
-    return "Reject"
 
 
 # ============================================================
@@ -1132,7 +1185,8 @@ def process_candidate(
 
     cv_text = extract_text(uploaded_file)
 
-    if not cv_text.strip():
+    if not cv_text.strip() or cv_text.startswith("ERROR_READING_"):
+        error_message = cv_text if cv_text.startswith("ERROR_READING_") else "Could not extract resume text. The PDF may be scanned/image-only."
         return {
             "File Name": filename,
             "Full Name": "",
@@ -1159,9 +1213,8 @@ def process_candidate(
             "Keyword Match": 0,
             "Experience Match": 0,
             "Education Match": 0,
-            "Relevancy Score": 0,
-            "Decision": "Reject",
-            "Match Summary": "Could not extract resume text."
+            "Relevancy (%)": 0,
+            "Match Summary": error_message
         }
 
     # --------------------------------------------------------
@@ -1253,10 +1306,6 @@ def process_candidate(
         edu_score
     )
 
-    decision = get_decision(
-        relevancy
-    )
-
     # --------------------------------------------------------
     # Match explanation
     # --------------------------------------------------------
@@ -1304,8 +1353,7 @@ def process_candidate(
         "Keyword Match": round(keyword_score, 1),
         "Experience Match": round(exp_score, 1),
         "Education Match": round(edu_score, 1),
-        "Relevancy Score": relevancy,
-        "Decision": decision,
+        "Relevancy (%)": relevancy,
         "Match Summary": summary
     }
 
@@ -1315,8 +1363,7 @@ def process_candidate(
 # ============================================================
 
 EXPORT_COLUMNS = [
-    "Relevancy Score",
-    "Decision",
+    "Relevancy (%)",
     "File Name",
     "Full Name",
     "First Name",
@@ -1425,10 +1472,9 @@ st.caption(
 
 st.markdown(
     """
-    Upload one Job Description and multiple CVs.
-    CvScout extracts structured candidate information and
-    calculates a data-driven relevance score using NLP,
-    TF-IDF, semantic embeddings and feature engineering.
+    Upload one Job Description and multiple CVs. CvScout extracts candidate information,
+    compares job-related text and skills, and ranks the CVs using NLP and similarity features.
+    Scores support human review; they are not probabilities or validated hiring decisions.
     """
 )
 
@@ -1470,7 +1516,7 @@ if jd_file:
         jd_file
     )
 
-    if jd_text.strip():
+    if jd_text.strip() and not jd_text.startswith("ERROR_READING_"):
 
         st.success(
             "Job Description loaded successfully."
@@ -1543,10 +1589,16 @@ if analyze:
     # --------------------------------------------------------
 
     with st.spinner(
-        "Loading Sentence Transformer model..."
+        "Loading Sentence Transformer model... (first run may download the model)"
     ):
-
-        model = load_embedding_model()
+        try:
+            model = load_embedding_model()
+        except Exception as exc:
+            st.error(
+                "Could not load the Sentence Transformer model. Check the internet connection "
+                f"and package installation. Details: {exc}"
+            )
+            st.stop()
 
     # --------------------------------------------------------
     # Process
@@ -1609,7 +1661,7 @@ if analyze:
     ]
 
     df = df.sort_values(
-        by="Relevancy Score",
+        by="Relevancy (%)",
         ascending=False
     ).reset_index(
         drop=True
@@ -1647,81 +1699,28 @@ if "results" in st.session_state:
     # --------------------------------------------------------
 
     total_candidates = len(df)
+    average_score = round(df["Relevancy (%)"].mean(), 1) if total_candidates else 0
+    highest_score = round(df["Relevancy (%)"].max(), 1) if total_candidates else 0
 
-    take_count = int(
-        (df["Decision"] == "Take").sum()
-    )
-
-    review_count = int(
-        (df["Decision"] == "Review").sum()
-    )
-
-    reject_count = int(
-        (df["Decision"] == "Reject").sum()
-    )
-
-    average_score = round(
-        df["Relevancy Score"].mean(),
-        1
-    )
-
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3 = st.columns(3)
 
     with m1:
-
-        st.metric(
-            "Candidates",
-            total_candidates
-        )
+        st.metric("Candidates Analysed", total_candidates)
 
     with m2:
-
-        st.metric(
-            "Take",
-            take_count
-        )
+        st.metric("Average Relevancy", f"{average_score}%")
 
     with m3:
-
-        st.metric(
-            "Review",
-            review_count
-        )
-
-    with m4:
-
-        st.metric(
-            "Average Relevancy",
-            f"{average_score}%"
-        )
+        st.metric("Highest Relevancy", f"{highest_score}%")
 
     st.caption(
-        f"Processed in {elapsed} seconds"
+        f"Processed in {elapsed} seconds. Relevancy is an estimated alignment score, "
+        "not a probability of hiring success or a validated accuracy percentage."
     )
 
-    # --------------------------------------------------------
-    # Distribution
-    # --------------------------------------------------------
-
-    st.markdown("### Decision Distribution")
-
-    dist_df = pd.DataFrame(
-        {
-            "Decision": [
-                "Take",
-                "Review",
-                "Reject"
-            ],
-            "Candidates": [
-                take_count,
-                review_count,
-                reject_count
-            ]
-        }
-    )
-
-    st.bar_chart(
-        dist_df.set_index("Decision")
+    st.info(
+        "Candidates are ranked by estimated alignment with the Job Description. "
+        "Review the CV and individual matching signals before making recruitment decisions."
     )
 
     # --------------------------------------------------------
@@ -1733,9 +1732,8 @@ if "results" in st.session_state:
     )
 
     display_columns = [
-        "Relevancy Score",
-        "Decision",
-        "File Name",
+        "Relevancy (%)",
+            "File Name",
         "Full Name",
         "First Name",
         "Email",
@@ -1786,7 +1784,7 @@ if "results" in st.session_state:
 
         st.metric(
             "Relevancy",
-            f"{selected['Relevancy Score']}%"
+            f"{selected['Relevancy (%)']}%"
         )
 
     with c2:
@@ -1829,8 +1827,6 @@ if "results" in st.session_state:
 
         st.markdown(
             f"""
-            **Decision:** {selected['Decision']}
-
             **Matched Skills:** {selected['Matched Skills']}
 
             **Missing Skills:** {selected['Missing Skills']}
